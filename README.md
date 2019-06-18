@@ -1,5 +1,6 @@
 ### Shared Array for Windows [python 3]
-
+*Share numpy arrays between processes*
+<br/>
 **example:**
 ```python
 import winsharedarray as sa
@@ -9,4 +10,3 @@ arr = np.zeros((5,5))
 
 sa.set_mem_sh("shm_mem_npy", arr)
 print(sa.get_mem_sh("shm_mem_npy", arr.nbytes))
-```
