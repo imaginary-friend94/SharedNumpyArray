@@ -7,6 +7,5 @@ setup(
         name = 'winsharedarray',
         version = '1.0',
         include_dirs = [np.get_include()], #Add Include path of numpy
-        #ext_modules = ext_modules,
-        packages=['.']
+        ext_modules = ext_modules
       )
