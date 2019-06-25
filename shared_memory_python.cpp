@@ -81,7 +81,8 @@ PyArrayObject * copy_from_buffer_to_numpy_array(char * buffer) {
 
 	PyArrayObject * array = (PyArrayObject *) PyArray_SimpleNew(nd, dims, type_num);
 	std::size_t size_data = size_data_array(array);
-	std::memcpy((char *) (array->data), (char *) current_pointer, size_data);
+	((char *) array->data) = (char *) current_pointer;
+	//std::memcpy((char *) (array->data), (char *) current_pointer, size_data);
 	return array;
 }
 
@@ -144,7 +145,7 @@ char * attach_shared_memory(char * string_shm, int max_buffer_size) {
 }
 
 static PyObject *
-set_mem_sh(PyObject *self, PyObject *args)
+create_mem_sh(PyObject *self, PyObject *args)
 {
 	PyObject * pyobj_for_shrdmem = nullptr;
 	char * string_shm;
@@ -165,7 +166,7 @@ set_mem_sh(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-get_mem_sh(PyObject *self, PyObject *args)
+attach_mem_sh(PyObject *self, PyObject *args)
 {
 	char * string_shm;
 	std::size_t size_array_bytes;
@@ -182,9 +183,9 @@ get_mem_sh(PyObject *self, PyObject *args)
 
 static PyMethodDef WinSharedArrayMethods[] = {
 
-    {"set_mem_sh",  set_mem_sh, METH_VARARGS,
+    {"create_mem_sh",  create_mem_sh, METH_VARARGS,
      "method for create shared memory named."},
-    {"get_mem_sh",  get_mem_sh, METH_VARARGS,
+    {"attach_mem_sh",  attach_mem_sh, METH_VARARGS,
      "method for get shared memory named."},
     {NULL, NULL, 0, NULL}
 };

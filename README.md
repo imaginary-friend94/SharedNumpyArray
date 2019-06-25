@@ -8,5 +8,8 @@ import numpy as np
 
 arr = np.zeros((5,5))
 
-sa.set_mem_sh("shm_mem_npy", arr)
-print(sa.get_mem_sh("shm_mem_npy", arr.nbytes))
+sa.create_mem_sh("shm_mem_npy", arr)
+array_attached = sa.attach_mem_sh("shm_mem_npy", arr.nbytes)
+array_attached[:3,:1] = 1
+
+
