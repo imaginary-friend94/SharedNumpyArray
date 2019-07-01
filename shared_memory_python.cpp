@@ -100,8 +100,9 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 		max_buffer_size,
 		string_shm);
 
-	if (hMapFile == nullptr) {
+	if (hMapFile == NULL) {
 		PyErr_SetString(PyExc_RuntimeError, "memory not allocated");
+		return nullptr;
 	}
 
 	char * pBuf = (char *) MapViewOfFile(hMapFile,
@@ -112,6 +113,7 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 
 	if (pBuf == nullptr) {
 		PyErr_SetString(PyExc_RuntimeError, "memory not allocated");
+		return nullptr;
 	}
 
 	return pBuf;
@@ -127,10 +129,10 @@ char * attach_shared_memory(char * string_shm, int max_buffer_size) {
 		FALSE,
 		string_shm); 
 
-	if (hMapFile == nullptr) {
+	if (hMapFile == NULL) {
 		PyErr_SetString(PyExc_RuntimeError, "memory not attached");
+		return nullptr;
 	}
-
 	char * pBuf = (char *) MapViewOfFile(hMapFile,
                         FILE_MAP_ALL_ACCESS,
                         0,
@@ -139,6 +141,7 @@ char * attach_shared_memory(char * string_shm, int max_buffer_size) {
 
 	if (pBuf == nullptr) {
 		PyErr_SetString(PyExc_RuntimeError, "memory not attached");
+		return nullptr;
 	}
 
 	return pBuf;
@@ -160,6 +163,9 @@ create_mem_sh(PyObject *self, PyObject *args)
 	/* Аrray size calculation */
 	std::size_t size_array_bytes = size_data_array(array_for_shrdmem);   
 	char * shBuf = create_shared_memory(string_shm, ARRAY_FULL_SIZE(array_for_shrdmem));
+	if (shBuf == nullptr) {
+		return NULL;
+	}
 	/* Copy array struct from heap to shared memory */
 	copy_from_numpy_array_to_buffer(array_for_shrdmem, shBuf);
 	return Py_True;
@@ -175,6 +181,9 @@ attach_mem_sh(PyObject *self, PyObject *args)
 	}
 	PyObject * ret = PyUnicode_FromString(string_shm);
 	char * shBuf = attach_shared_memory(string_shm, size_array_bytes);
+	if (shBuf == nullptr) {
+		return NULL;
+	}
 
 	PyArrayObject * array_for_shrdmem = (PyArrayObject *) shBuf;
 	array_for_shrdmem = copy_from_buffer_to_numpy_array(shBuf);
