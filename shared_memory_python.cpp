@@ -118,6 +118,31 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 
 	return pBuf;
 }
+/*
+ * Del a buffer in shared memory
+ */
+bool delete_shared_memory(char * string_shm, int max_buffer_size) {
+
+	HANDLE hMapFile = OpenFileMapping(
+		FILE_MAP_ALL_ACCESS,
+		FALSE,
+		string_shm);
+
+	char * pBuf = (char *) MapViewOfFile(hMapFile,
+                        FILE_MAP_ALL_ACCESS,
+                        0,
+                        0,
+                        max_buffer_size);
+
+	if (!CloseHandle(hMapFile)) {
+		return false;
+	}
+
+	if (!UnmapViewOfFile((LPCVOID) pBuf)) {
+		return false;
+	}
+	return true;
+}
 
 /*
  * Attach a buffer in shared memory
@@ -155,7 +180,6 @@ create_mem_sh(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "sO", &string_shm, &pyobj_for_shrdmem)) {
 		PyErr_SetString(PyExc_RuntimeError, "set_mem_sh: parse except");
 	}
-	PyObject * ret = PyUnicode_FromString(string_shm);
 	PyArrayObject * array_for_shrdmem = (PyArrayObject *) pyobj_for_shrdmem;
 	if (array_for_shrdmem->base != nullptr) {
 		PyErr_SetString(PyExc_RuntimeError, "set_mem_sh: array is not homogeneous");
@@ -179,7 +203,6 @@ attach_mem_sh(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "si", &string_shm, &size_array_bytes)) {
 		PyErr_SetString(PyExc_RuntimeError, "get_mem_sh: parse except");
 	}
-	PyObject * ret = PyUnicode_FromString(string_shm);
 	char * shBuf = attach_shared_memory(string_shm, size_array_bytes);
 	if (shBuf == nullptr) {
 		return NULL;
@@ -190,12 +213,27 @@ attach_mem_sh(PyObject *self, PyObject *args)
 	return (PyObject *) array_for_shrdmem;
 }
 
+static PyObject *
+delete_mem_sh(PyObject *self, PyObject *args) {
+	char * string_shm;
+	std::size_t size_array_bytes;
+	if (!PyArg_ParseTuple(args, "si", &string_shm, &size_array_bytes)) {
+		PyErr_SetString(PyExc_RuntimeError, "get_mem_sh: parse except");
+	}
+	if (delete_shared_memory(string_shm, size_array_bytes)) {
+		return Py_True;
+	}
+	return Py_False;
+}
+
 static PyMethodDef WinSharedArrayMethods[] = {
 
     {"create_mem_sh",  create_mem_sh, METH_VARARGS,
      "method for create shared memory named."},
     {"attach_mem_sh",  attach_mem_sh, METH_VARARGS,
      "method for get shared memory named."},
+    {"delete_mem_sh",  delete_mem_sh, METH_VARARGS,
+     "method for del shared memory named."},
     {NULL, NULL, 0, NULL}
 };
 
