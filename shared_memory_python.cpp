@@ -192,6 +192,7 @@ create_mem_sh(PyObject *self, PyObject *args)
 	}
 	/* Copy array struct from heap to shared memory */
 	copy_from_numpy_array_to_buffer(array_for_shrdmem, shBuf);
+	Py_INCREF(Py_True);
 	return Py_True;
 }
 
@@ -210,6 +211,7 @@ attach_mem_sh(PyObject *self, PyObject *args)
 
 	PyArrayObject * array_for_shrdmem = (PyArrayObject *) shBuf;
 	array_for_shrdmem = copy_from_buffer_to_numpy_array(shBuf);
+	Py_INCREF((PyObject *) array_for_shrdmem);
 	return (PyObject *) array_for_shrdmem;
 }
 
@@ -221,9 +223,126 @@ delete_mem_sh(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "get_mem_sh: parse except");
 	}
 	if (delete_shared_memory(string_shm, size_array_bytes)) {
+		Py_INCREF(Py_True);
 		return Py_True;
 	}
+	Py_INCREF(Py_True);
 	return Py_False;
+}
+
+// static PyObject *
+// create_semaphore(PyObject *self, PyObject *args) {
+// 	char * string_smp;
+// 	int start_val, max_val;
+// 	if (!PyArg_ParseTuple(args, "sii", &string_shm, &start_val, &max_val)) {
+// 		PyErr_SetString(PyExc_RuntimeError, "create_semaphore: parse except");
+// 	}
+// 	HANDLE hSemaphore = CreateSemaphore( 
+// 	    NULL,
+// 	    (LONG) start_val,
+// 	    (LONG) max_val,
+// 	    string_smp
+// 	);
+
+// }
+
+void destructor_mutex(PyObject *caps_mutex) {
+	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	ReleaseMutex(mut);
+	//std::cout << ReleaseMutex(mut) << std::endl;
+	//std::cout << GetLastError() << std::endl;
+}
+
+static PyObject *
+create_mutex(PyObject *self, PyObject *args) {
+	char * string_smp;
+	if (!PyArg_ParseTuple(args, "s", &string_smp)) {
+		PyErr_SetString(PyExc_RuntimeError, "create_mutex: parse except");
+		return nullptr;
+	}
+	HANDLE mut = CreateMutex(
+		NULL, 
+		TRUE, 
+		string_smp
+	);
+	if (mut == nullptr) {
+		Py_INCREF(Py_None);
+		return Py_None;
+	}
+	return PyCapsule_New((void *) mut, string_smp, (PyCapsule_Destructor) destructor_mutex);
+}
+
+static PyObject *
+open_mutex(PyObject *self, PyObject *args) {
+	char * string_smp;
+	if (!PyArg_ParseTuple(args, "s", &string_smp)) {
+		PyErr_SetString(PyExc_RuntimeError, "open_mutex: parse except");
+		return nullptr;
+	}
+	HANDLE mut = OpenMutex(
+		MUTEX_ALL_ACCESS, 
+		TRUE, 
+		string_smp
+	);
+	if (mut == nullptr) {
+		Py_INCREF(Py_None);
+		return Py_None;
+	}
+	return PyCapsule_New((void *) mut, string_smp, (PyCapsule_Destructor) destructor_mutex);
+}
+
+static PyObject *
+release_mutex(PyObject *self, PyObject *args) {
+	PyObject * caps_mutex;
+	if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
+		PyErr_SetString(PyExc_RuntimeError, "release_mutex: parse except");
+		return nullptr;
+	}
+	destructor_mutex(caps_mutex);
+	Py_INCREF(Py_True);
+	return Py_True;
+}
+
+static PyObject *
+close_mutex(PyObject *self, PyObject *args) {
+	PyObject * caps_mutex;
+	if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
+		PyErr_SetString(PyExc_RuntimeError, "close_mutex: parse except");
+		return nullptr;
+	}
+	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	if (CloseHandle(mut)) {
+		Py_INCREF(Py_True);
+		return Py_True;
+	}
+	Py_INCREF(Py_False);
+	return Py_False;
+}
+
+static PyObject * _try_capture_mutex(PyObject *self, PyObject *args, DWORD msec) {
+	PyObject * caps_mutex;
+	if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
+		PyErr_SetString(PyExc_RuntimeError, "close_mutex: parse except");
+		return nullptr;
+	}
+	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	DWORD out = WaitForSingleObject(mut, msec);
+	if (out == 0) {
+		Py_INCREF(Py_True);
+		return Py_True;
+	}
+	Py_INCREF(Py_False);
+	return Py_False;
+}
+
+static PyObject *
+try_capture_mutex(PyObject *self, PyObject *args) {
+	return _try_capture_mutex(self, args, (DWORD) 0);
+}
+
+static PyObject *
+capture_mutex(PyObject *self, PyObject *args) {
+	return _try_capture_mutex(self, args, INFINITE);
 }
 
 static PyMethodDef WinSharedArrayMethods[] = {
@@ -234,6 +353,18 @@ static PyMethodDef WinSharedArrayMethods[] = {
      "method for get shared memory named."},
     {"delete_mem_sh",  delete_mem_sh, METH_VARARGS,
      "method for del shared memory named."},
+    {"create_mutex",  create_mutex, METH_VARARGS,
+     "tt"},
+    {"open_mutex",  open_mutex, METH_VARARGS,
+     "tt"},
+    {"release_mutex",  release_mutex, METH_VARARGS,
+     "tt"},
+    {"close_mutex",  close_mutex, METH_VARARGS,
+     "tt"},
+    {"try_capture_mutex",  try_capture_mutex, METH_VARARGS,
+     "tt"},
+    {"capture_mutex",  capture_mutex, METH_VARARGS,
+     "tt"},
     {NULL, NULL, 0, NULL}
 };
 
