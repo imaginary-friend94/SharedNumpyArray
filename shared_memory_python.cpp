@@ -6,7 +6,7 @@
 
 #define WIN_SMEM "WINDOWS SHARED MEMORY"
 #define ARRAY_STRUCT_SIZE sizeof(PyArrayObject)
-#define ARRAY_FULL_SIZE(arr) (size_data_array(arr) + sizeof(int) + arr->nd * sizeof(npy_intp) * 2 + sizeof(int))
+#define ARRAY_FULL_SIZE(arr) (size_data_array(arr) + sizeof(int) + arr->nd * sizeof(npy_intp) * 3 + sizeof(int))
 
 /*
  * copy_from_pointer_array
@@ -79,10 +79,11 @@ PyArrayObject * copy_from_buffer_to_numpy_array(char * buffer) {
 	int type_num = *((int *) current_pointer);
 	current_pointer += sizeof(int);
 
-	PyArrayObject * array = (PyArrayObject *) PyArray_SimpleNew(nd, dims, type_num);
-	std::size_t size_data = size_data_array(array);
-	((char *) array->data) = (char *) current_pointer;
-	//std::memcpy((char *) (array->data), (char *) current_pointer, size_data);
+	PyArrayObject * array = (PyArrayObject *) PyArray_SimpleNewFromData(nd, 
+		dims, 
+		type_num, 
+		(void *) current_pointer
+	);
 	return array;
 }
 
@@ -90,7 +91,7 @@ PyArrayObject * copy_from_buffer_to_numpy_array(char * buffer) {
  * Create a buffer in shared memory
  */
 char * create_shared_memory(char * string_shm, int max_buffer_size) {
-
+	//max_buffer_size *= 2;
 	HANDLE hMapFile;
 	hMapFile = CreateFileMapping(
 		INVALID_HANDLE_VALUE,
@@ -121,34 +122,28 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 /*
  * Del a buffer in shared memory
  */
-bool delete_shared_memory(char * string_shm, int max_buffer_size) {
-
+bool delete_shared_memory(char * string_shm) {
+	//max_buffer_size *= 2;
 	HANDLE hMapFile = OpenFileMapping(
 		FILE_MAP_ALL_ACCESS,
 		FALSE,
 		string_shm);
 
-	char * pBuf = (char *) MapViewOfFile(hMapFile,
-                        FILE_MAP_ALL_ACCESS,
-                        0,
-                        0,
-                        max_buffer_size);
-
 	if (!CloseHandle(hMapFile)) {
 		return false;
 	}
 
-	if (!UnmapViewOfFile((LPCVOID) pBuf)) {
-		return false;
-	}
+	// if (!UnmapViewOfFile((LPCVOID) pBuf)) {
+	// 	return false;
+	// }
 	return true;
 }
 
 /*
  * Attach a buffer in shared memory
  */
-char * attach_shared_memory(char * string_shm, int max_buffer_size) {
-
+char * attach_shared_memory(char * string_shm) {
+	//max_buffer_size *= 2;
 	HANDLE hMapFile = OpenFileMapping(
 		FILE_MAP_ALL_ACCESS,
 		FALSE,
@@ -162,7 +157,19 @@ char * attach_shared_memory(char * string_shm, int max_buffer_size) {
                         FILE_MAP_ALL_ACCESS,
                         0,
                         0,
-                        max_buffer_size);
+                        sizeof(size_t));
+
+	size_t full_array_size = *((size_t *) pBuf);
+
+	UnmapViewOfFile((LPCVOID) pBuf);
+
+	pBuf = (char *) MapViewOfFile(hMapFile,
+                        FILE_MAP_ALL_ACCESS,
+                        0,
+                        0,
+                        full_array_size);
+
+	pBuf += sizeof(size_t);
 
 	if (pBuf == nullptr) {
 		PyErr_SetString(PyExc_RuntimeError, "memory not attached");
@@ -191,6 +198,8 @@ create_mem_sh(PyObject *self, PyObject *args)
 		return NULL;
 	}
 	/* Copy array struct from heap to shared memory */
+	*((size_t *) shBuf) = ARRAY_FULL_SIZE(array_for_shrdmem);
+	shBuf += sizeof(size_t);
 	copy_from_numpy_array_to_buffer(array_for_shrdmem, shBuf);
 	Py_INCREF(Py_True);
 	return Py_True;
@@ -200,11 +209,10 @@ static PyObject *
 attach_mem_sh(PyObject *self, PyObject *args)
 {
 	char * string_shm;
-	std::size_t size_array_bytes;
-	if (!PyArg_ParseTuple(args, "si", &string_shm, &size_array_bytes)) {
+	if (!PyArg_ParseTuple(args, "s", &string_shm)) {
 		PyErr_SetString(PyExc_RuntimeError, "get_mem_sh: parse except");
 	}
-	char * shBuf = attach_shared_memory(string_shm, size_array_bytes);
+	char * shBuf = attach_shared_memory(string_shm);
 	if (shBuf == nullptr) {
 		return NULL;
 	}
@@ -218,33 +226,16 @@ attach_mem_sh(PyObject *self, PyObject *args)
 static PyObject *
 delete_mem_sh(PyObject *self, PyObject *args) {
 	char * string_shm;
-	std::size_t size_array_bytes;
-	if (!PyArg_ParseTuple(args, "si", &string_shm, &size_array_bytes)) {
+	if (!PyArg_ParseTuple(args, "s", &string_shm)) {
 		PyErr_SetString(PyExc_RuntimeError, "get_mem_sh: parse except");
 	}
-	if (delete_shared_memory(string_shm, size_array_bytes)) {
+	if (delete_shared_memory(string_shm)) {
 		Py_INCREF(Py_True);
 		return Py_True;
 	}
 	Py_INCREF(Py_True);
 	return Py_False;
 }
-
-// static PyObject *
-// create_semaphore(PyObject *self, PyObject *args) {
-// 	char * string_smp;
-// 	int start_val, max_val;
-// 	if (!PyArg_ParseTuple(args, "sii", &string_shm, &start_val, &max_val)) {
-// 		PyErr_SetString(PyExc_RuntimeError, "create_semaphore: parse except");
-// 	}
-// 	HANDLE hSemaphore = CreateSemaphore( 
-// 	    NULL,
-// 	    (LONG) start_val,
-// 	    (LONG) max_val,
-// 	    string_smp
-// 	);
-
-// }
 
 void destructor_mutex(PyObject *caps_mutex) {
 	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));

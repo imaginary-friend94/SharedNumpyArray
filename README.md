@@ -9,7 +9,7 @@ import numpy as np
 arr = np.zeros((5,5))
 
 sa.create_mem_sh("shm_mem_npy", arr)
-array_attached = sa.attach_mem_sh("shm_mem_npy", arr.nbytes)
+array_attached = sa.attach_mem_sh("shm_mem_npy")
 array_attached[:3,:1] = 1
 
 
