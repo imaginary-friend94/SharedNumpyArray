@@ -180,6 +180,24 @@ char * attach_shared_memory(char * string_shm) {
 }
 
 static PyObject *
+check_mem_sh(PyObject *self, PyObject *args) 
+{
+	char * string_shm;
+	if (!PyArg_ParseTuple(args, "s", &string_shm)) {
+		PyErr_SetString(PyExc_RuntimeError, "set_mem_sh: parse except");
+	}
+	HANDLE hMapFile = OpenFileMapping(
+		FILE_MAP_ALL_ACCESS,
+		FALSE,
+		string_shm);
+	if (hMapFile == nullptr) {
+		return Py_False;
+	}
+	return Py_True;
+
+}
+
+static PyObject *
 create_mem_sh(PyObject *self, PyObject *args)
 {
 	PyObject * pyobj_for_shrdmem = nullptr;
@@ -344,6 +362,8 @@ static PyMethodDef WinSharedArrayMethods[] = {
      "method for get shared memory named."},
     {"delete_mem_sh",  delete_mem_sh, METH_VARARGS,
      "method for del shared memory named."},
+    {"check_mem_sh",  check_mem_sh, METH_VARARGS,
+     "method for check shared memory named."},
     {"create_mutex",  create_mutex, METH_VARARGS,
      "tt"},
     {"open_mutex",  open_mutex, METH_VARARGS,
