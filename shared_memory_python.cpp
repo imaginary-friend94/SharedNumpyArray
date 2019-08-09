@@ -328,12 +328,7 @@ close_mutex(PyObject *self, PyObject *args) {
 	return Py_False;
 }
 
-static PyObject * _try_capture_mutex(PyObject *self, PyObject *args, DWORD msec) {
-	PyObject * caps_mutex;
-	if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
-		PyErr_SetString(PyExc_RuntimeError, "close_mutex: parse except");
-		return nullptr;
-	}
+static PyObject * _try_capture_mutex(PyObject * caps_mutex, DWORD msec) {
 	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
 	DWORD out = WaitForSingleObject(mut, msec);
 	if (out == 0) {
@@ -346,12 +341,23 @@ static PyObject * _try_capture_mutex(PyObject *self, PyObject *args, DWORD msec)
 
 static PyObject *
 try_capture_mutex(PyObject *self, PyObject *args) {
-	return _try_capture_mutex(self, args, (DWORD) 0);
+	PyObject * caps_mutex;
+	int timeout;
+	if (!PyArg_ParseTuple(args, "Oi", &caps_mutex, &timeout)) {
+		PyErr_SetString(PyExc_RuntimeError, "try_capture_mutex: parse except");
+		return nullptr;
+	}
+	return _try_capture_mutex(caps_mutex, (DWORD) timeout);
 }
 
 static PyObject *
 capture_mutex(PyObject *self, PyObject *args) {
-	return _try_capture_mutex(self, args, INFINITE);
+	PyObject * caps_mutex;
+	if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
+		PyErr_SetString(PyExc_RuntimeError, "capture_mutex: parse except");
+		return nullptr;
+	}
+	return _try_capture_mutex(caps_mutex, INFINITE);
 }
 
 static PyMethodDef WinSharedArrayMethods[] = {
