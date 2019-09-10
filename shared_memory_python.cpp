@@ -1,6 +1,11 @@
+#if defined(_WIN64) || defined(_WIN32) || defined(__CYGWIN__)
+	#include <windows.h>
+#elif defined(__linux__)
+	#include <sys/mmap>
+#endif
+
 #include "Python.h"
 #include "numpy/arrayobject.h"
-#include <windows.h>
 #include <iostream>
 #include <cstdio>
 
@@ -33,7 +38,6 @@ std::size_t size_data_array(PyArrayObject *arr) {
 	size *= PyArray_ITEMSIZE(arr);
 	return size;
 }
-
 
 void copy_from_numpy_array_to_buffer(PyArrayObject * array, char * buffer) {
 	char * current_pointer = buffer;
@@ -87,11 +91,14 @@ PyArrayObject * copy_from_buffer_to_numpy_array(char * buffer) {
 	return array;
 }
 
+
 /*
  * Create a buffer in shared memory
  */
 char * create_shared_memory(char * string_shm, int max_buffer_size) {
-	//max_buffer_size *= 2;
+	bool error_open_file_flag = false;
+
+#if defined(_WIN64) || defined(_WIN32) || defined(__CYGWIN__)
 	HANDLE hMapFile;
 	hMapFile = CreateFileMapping(
 		INVALID_HANDLE_VALUE,
@@ -100,17 +107,27 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 		0,
 		max_buffer_size,
 		string_shm);
+	if (hMapFile == NULL) error_open_file_flag = true;
+#elif defined(__linux__)
+	int hMapFile = open(fname, O_RDWR, 0);
+	if (hMapFile == -1) error_open_file_flag = true;
+#endif
 
-	if (hMapFile == NULL) {
-		PyErr_SetString(PyExc_RuntimeError, "memory not allocated");
+	if (error_open_file_flag) {
+		PyErr_SetString(PyExc_RuntimeError, "create file is failed");
 		return nullptr;
 	}
 
+#if defined(_WIN64) || defined(_WIN32) || defined(__CYGWIN__)
 	char * pBuf = (char *) MapViewOfFile(hMapFile,
                         FILE_MAP_ALL_ACCESS,
                         0,
                         0,
                         max_buffer_size);
+#elif defined(__linux__)
+
+#endif
+
 
 	if (pBuf == nullptr) {
 		PyErr_SetString(PyExc_RuntimeError, "memory not allocated");
