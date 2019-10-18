@@ -377,6 +377,14 @@ capture_mutex(PyObject *self, PyObject *args) {
 	return _try_capture_mutex(caps_mutex, INFINITE);
 }
 
+static PyObject *
+get_last_error(PyObject *self, PyObject *args) {
+	DWORD err =  GetLastError();
+	PyObject * py_err = Py_BuildValue("i", (unsigned int) err);
+	Py_INCREF(py_err);
+	return py_err;
+}
+
 static PyMethodDef WinSharedArrayMethods[] = {
 
     {"create_mem_sh",  create_mem_sh, METH_VARARGS,
@@ -388,17 +396,19 @@ static PyMethodDef WinSharedArrayMethods[] = {
     {"check_mem_sh",  check_mem_sh, METH_VARARGS,
      "method for check shared memory named."},
     {"create_mutex",  create_mutex, METH_VARARGS,
-     "tt"},
+     ""},
     {"open_mutex",  open_mutex, METH_VARARGS,
-     "tt"},
+     ""},
     {"release_mutex",  release_mutex, METH_VARARGS,
-     "tt"},
+     ""},
     {"close_mutex",  close_mutex, METH_VARARGS,
-     "tt"},
+     ""},
     {"try_capture_mutex",  try_capture_mutex, METH_VARARGS,
-     "tt"},
+     ""},
     {"capture_mutex",  capture_mutex, METH_VARARGS,
-     "tt"},
+     "capture mutex"},
+    {"get_last_error",  get_last_error, METH_VARARGS,
+     "returns the result of the call GetLastError() function"},  
     {NULL, NULL, 0, NULL}
 };
 

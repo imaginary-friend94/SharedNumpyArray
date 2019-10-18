@@ -58,6 +58,16 @@ if __name__ == '__main__':
 	array_attached[:3,:1] = 1
 	print(array_attached)
 
+	print(
+		sa.check_mem_sh("shm_mem_npy_test_3"),
+		sa.check_mem_sh("shm_mem_npy_test_55")
+	)
+	sa.delete_mem_sh("shm_mem_npy_test_3")
+	sa.create_mem_sh("shm_mem_npy_test_55", arr)
+	print(
+		sa.check_mem_sh("shm_mem_npy_test_3"),
+		sa.check_mem_sh("shm_mem_npy_test_55")
+	)
 	## TEST 4
 
 	mutx = sa.create_mutex("sem_cntr")
@@ -71,4 +81,6 @@ if __name__ == '__main__':
 
 	cntr = sa.attach_mem_sh("shm_mem_npy_counter")
 	print(cntr[0][0]) # == 10000+20000+30000=60000
+
+	print("GetLastError() = ", sa.get_last_error())
 
