@@ -1,13 +1,26 @@
 #if defined(_WIN64) || defined(_WIN32) || defined(__CYGWIN__)
-	#include <windows.h>
+#define WIN
+#include <windows.h>
 #elif defined(__linux__)
-	#include <sys/mmap>
+#define LINUX
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <semaphore.h>
+
+struct MutexLinuxStuct
+{
+	sem_t * mut;
+	bool locked;
+};
+
 #endif
 
 #include "Python.h"
 #include "numpy/arrayobject.h"
 #include <iostream>
 #include <cstdio>
+#include <cstring>
 
 #define WIN_SMEM "WINDOWS SHARED MEMORY"
 #define ARRAY_STRUCT_SIZE sizeof(PyArrayObject)
@@ -17,6 +30,7 @@
  * copy_from_pointer_array
  * the method returns the number of bytes copied
  */
+
 template <typename ObjectType>
 std::size_t copy_from_pointer_array(ObjectType * buffer_dist, ObjectType * buffer_src, size_t len) {
 	for (int i = 0; i < len; i++) {
@@ -98,7 +112,7 @@ PyArrayObject * copy_from_buffer_to_numpy_array(char * buffer) {
 char * create_shared_memory(char * string_shm, int max_buffer_size) {
 	bool error_open_file_flag = false;
 
-#if defined(_WIN64) || defined(_WIN32) || defined(__CYGWIN__)
+#if defined(WIN)
 	HANDLE hMapFile;
 	hMapFile = CreateFileMapping(
 		INVALID_HANDLE_VALUE,
@@ -108,8 +122,10 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 		max_buffer_size,
 		string_shm);
 	if (hMapFile == NULL) error_open_file_flag = true;
-#elif defined(__linux__)
-	int hMapFile = open(fname, O_RDWR, 0);
+#elif defined(LINUX)
+	creat(string_shm, S_IRWXU | S_IRWXG | S_IRWXO);
+	int hMapFile = open(string_shm, O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
+	fallocate(hMapFile, FALLOC_FL_ZERO_RANGE, 0, max_buffer_size);
 	if (hMapFile == -1) error_open_file_flag = true;
 #endif
 
@@ -118,16 +134,15 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 		return nullptr;
 	}
 
-#if defined(_WIN64) || defined(_WIN32) || defined(__CYGWIN__)
+#if defined(WIN)
 	char * pBuf = (char *) MapViewOfFile(hMapFile,
                         FILE_MAP_ALL_ACCESS,
                         0,
                         0,
                         max_buffer_size);
-#elif defined(__linux__)
-
+#elif defined(LINUX)
+	char * pBuf = (char *) mmap(0, max_buffer_size, PROT_WRITE | PROT_READ, MAP_SHARED, hMapFile, 0);
 #endif
-
 
 	if (pBuf == nullptr) {
 		PyErr_SetString(PyExc_RuntimeError, "memory not allocated");
@@ -141,14 +156,14 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
  */
 bool delete_shared_memory(char * string_shm) {
 	//max_buffer_size *= 2;
-	HANDLE hMapFile = OpenFileMapping(
-		FILE_MAP_ALL_ACCESS,
-		FALSE,
-		string_shm);
+	// HANDLE hMapFile = OpenFileMapping(
+	// 	FILE_MAP_ALL_ACCESS,
+	// 	FALSE,
+	// 	string_shm);
 
-	if (!CloseHandle(hMapFile)) {
-		return false;
-	}
+	// if (!CloseHandle(hMapFile)) {
+	// 	return false;
+	// }
 
 	// if (!UnmapViewOfFile((LPCVOID) pBuf)) {
 	// 	return false;
@@ -160,31 +175,46 @@ bool delete_shared_memory(char * string_shm) {
  * Attach a buffer in shared memory
  */
 char * attach_shared_memory(char * string_shm) {
-	//max_buffer_size *= 2;
+	bool error_open_file_flag = false;
+#if defined(WIN)
 	HANDLE hMapFile = OpenFileMapping(
 		FILE_MAP_ALL_ACCESS,
 		FALSE,
 		string_shm); 
+	if (hMapFile == NULL) error_open_file_flag = true;
+#elif defined(__linux__)
+	int hMapFile = open(string_shm, O_RDWR, 0);
+	if (hMapFile == -1) error_open_file_flag = true;
+#endif
 
-	if (hMapFile == NULL) {
+	if (error_open_file_flag) {
 		PyErr_SetString(PyExc_RuntimeError, "memory not attached");
 		return nullptr;
 	}
+
+#if defined(WIN)
 	char * pBuf = (char *) MapViewOfFile(hMapFile,
                         FILE_MAP_ALL_ACCESS,
                         0,
                         0,
                         sizeof(size_t));
+#elif defined(__linux__)
+	char * pBuf = (char *) mmap(0, sizeof(size_t), PROT_WRITE | PROT_READ, MAP_SHARED, hMapFile, 0);
+#endif
 
 	size_t full_array_size = *((size_t *) pBuf);
 
+#if defined(WIN)
 	UnmapViewOfFile((LPCVOID) pBuf);
-
 	pBuf = (char *) MapViewOfFile(hMapFile,
                         FILE_MAP_ALL_ACCESS,
                         0,
                         0,
                         full_array_size);
+#elif defined(__linux__)
+	munmap(pBuf, sizeof(size_t));
+	pBuf = (char *) mmap(0, full_array_size, PROT_WRITE | PROT_READ, MAP_SHARED, hMapFile, 0);
+#endif
 
 	pBuf += sizeof(size_t);
 
@@ -203,11 +233,19 @@ check_mem_sh(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "s", &string_shm)) {
 		PyErr_SetString(PyExc_RuntimeError, "set_mem_sh: parse except");
 	}
+	bool error_open_file_flag = false;
+
+#if defined(WIN)
 	HANDLE hMapFile = OpenFileMapping(
 		FILE_MAP_ALL_ACCESS,
 		FALSE,
 		string_shm);
-	if (hMapFile == nullptr) {
+	if (hMapFile == NULL) error_open_file_flag = true;
+#elif defined(__linux__)
+	int hMapFile = open(string_shm, O_RDWR, 0);
+	if (hMapFile == -1) error_open_file_flag = true;
+#endif	
+	if (error_open_file_flag) {
 		return Py_False;
 	}
 	return Py_True;
@@ -226,8 +264,7 @@ create_mem_sh(PyObject *self, PyObject *args)
 	if (array_for_shrdmem->base != nullptr) {
 		PyErr_SetString(PyExc_RuntimeError, "set_mem_sh: array is not homogeneous");
 	}
-	/* Аrray size calculation */
-	std::size_t size_array_bytes = size_data_array(array_for_shrdmem);   
+	/* Аrray size calculation */ 
 	char * shBuf = create_shared_memory(string_shm, ARRAY_FULL_SIZE(array_for_shrdmem));
 	if (shBuf == nullptr) {
 		return NULL;
@@ -273,8 +310,8 @@ delete_mem_sh(PyObject *self, PyObject *args) {
 }
 
 void destructor_mutex(PyObject *caps_mutex) {
-	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
-	ReleaseMutex(mut);
+	// HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	// ReleaseMutex(mut);
 	//std::cout << ReleaseMutex(mut) << std::endl;
 	//std::cout << GetLastError() << std::endl;
 }
@@ -286,11 +323,19 @@ create_mutex(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "create_mutex: parse except");
 		return nullptr;
 	}
+#if defined(WIN)
 	HANDLE mut = CreateMutex(
 		NULL, 
 		TRUE, 
 		string_smp
 	);
+	ReleaseMutex(mut);
+#elif defined(LINUX)
+	MutexLinuxStuct * mut = new MutexLinuxStuct{
+		sem_open(string_smp, O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO, 0), 
+		false
+	};
+#endif
 	if (mut == nullptr) {
 		Py_INCREF(Py_None);
 		return Py_None;
@@ -305,11 +350,20 @@ open_mutex(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "open_mutex: parse except");
 		return nullptr;
 	}
+
+#if defined(WIN)
 	HANDLE mut = OpenMutex(
 		MUTEX_ALL_ACCESS, 
 		TRUE, 
 		string_smp
 	);
+#elif defined(LINUX)
+	MutexLinuxStuct * mut = new MutexLinuxStuct{
+		sem_open(string_smp, O_CREAT), 
+		false
+	};
+#endif
+
 	if (mut == nullptr) {
 		Py_INCREF(Py_None);
 		return Py_None;
@@ -324,30 +378,55 @@ release_mutex(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "release_mutex: parse except");
 		return nullptr;
 	}
-	destructor_mutex(caps_mutex);
+#if defined(WIN)
+	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	ReleaseMutex(mut);
+#elif defined(LINUX)
+	MutexLinuxStuct * mut = (MutexLinuxStuct *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	if (mut->locked) {
+		sem_post(mut->mut);
+		mut->locked = false;
+	}
+#endif
 	Py_INCREF(Py_True);
 	return Py_True;
 }
 
 static PyObject *
 close_mutex(PyObject *self, PyObject *args) {
-	PyObject * caps_mutex;
-	if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
-		PyErr_SetString(PyExc_RuntimeError, "close_mutex: parse except");
-		return nullptr;
-	}
-	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
-	if (CloseHandle(mut)) {
-		Py_INCREF(Py_True);
-		return Py_True;
-	}
+	// PyObject * caps_mutex;
+	// if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
+	// 	PyErr_SetString(PyExc_RuntimeError, "close_mutex: parse except");
+	// 	return nullptr;
+	// }
+	// HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	// if (CloseHandle(mut)) {
+	// 	Py_INCREF(Py_True);
+	// 	return Py_True;
+	// }
 	Py_INCREF(Py_False);
 	return Py_False;
 }
 
-static PyObject * _try_capture_mutex(PyObject * caps_mutex, DWORD msec) {
+static PyObject * _try_capture_mutex(PyObject * caps_mutex, int msec) {
+#if defined(WIN)
 	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
-	DWORD out = WaitForSingleObject(mut, msec);
+	DWORD out = WaitForSingleObject(mut, (DWORD) msec);
+#elif defined(LINUX)
+	MutexLinuxStuct * mut = (MutexLinuxStuct *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	int out;
+	if (msec == 0) {
+		out = sem_trywait(mut->mut);
+	} else if (msec != -1) {
+		timespec ts;
+		ts.tv_nsec = msec * 1000;
+		out = sem_timedwait(mut->mut, &ts);
+	} else {
+		out = sem_wait(mut->mut);
+	}
+	mut->locked = true;
+#endif
+
 	if (out == 0) {
 		Py_INCREF(Py_True);
 		return Py_True;
@@ -364,7 +443,7 @@ try_capture_mutex(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "try_capture_mutex: parse except");
 		return nullptr;
 	}
-	return _try_capture_mutex(caps_mutex, (DWORD) timeout);
+	return _try_capture_mutex(caps_mutex, timeout);
 }
 
 static PyObject *
@@ -374,13 +453,16 @@ capture_mutex(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "capture_mutex: parse except");
 		return nullptr;
 	}
-	return _try_capture_mutex(caps_mutex, INFINITE);
+	return _try_capture_mutex(caps_mutex, -1);
 }
 
 static PyObject *
 get_last_error(PyObject *self, PyObject *args) {
-	DWORD err =  GetLastError();
-	PyObject * py_err = Py_BuildValue("i", (unsigned int) err);
+#if defined(WIN)
+	PyObject * py_err = Py_BuildValue("i", (unsigned int) GetLastError());
+#elif defined(LINUX)
+	PyObject * py_err = Py_BuildValue("i", (unsigned int) errno);
+#endif
 	Py_INCREF(py_err);
 	return py_err;
 }
@@ -408,7 +490,7 @@ static PyMethodDef WinSharedArrayMethods[] = {
     {"capture_mutex",  capture_mutex, METH_VARARGS,
      "capture mutex"},
     {"get_last_error",  get_last_error, METH_VARARGS,
-     "returns the result of the call GetLastError() function"},  
+     "returns the result of the call GetLastError() function"},
     {NULL, NULL, 0, NULL}
 };
 
