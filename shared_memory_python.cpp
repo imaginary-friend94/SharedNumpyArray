@@ -8,10 +8,10 @@
 #include <fcntl.h>
 #include <semaphore.h>
 
-struct MutexLinuxStuct
+struct sem_wrapper
 {
-	sem_t * mut;
-	bool locked;
+	sem_t * sem;
+	bool is_locked;
 };
 
 #endif
@@ -30,7 +30,6 @@ struct MutexLinuxStuct
  * copy_from_pointer_array
  * the method returns the number of bytes copied
  */
-
 template <typename ObjectType>
 std::size_t copy_from_pointer_array(ObjectType * buffer_dist, ObjectType * buffer_src, size_t len) {
 	for (int i = 0; i < len; i++) {
@@ -329,10 +328,9 @@ create_mutex(PyObject *self, PyObject *args) {
 		TRUE, 
 		string_smp
 	);
-	ReleaseMutex(mut);
 #elif defined(LINUX)
-	MutexLinuxStuct * mut = new MutexLinuxStuct{
-		sem_open(string_smp, O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO, 0), 
+	sem_wrapper * mut = new sem_wrapper{
+		sem_open(string_smp, O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO, 1), 
 		false
 	};
 #endif
@@ -358,7 +356,7 @@ open_mutex(PyObject *self, PyObject *args) {
 		string_smp
 	);
 #elif defined(LINUX)
-	MutexLinuxStuct * mut = new MutexLinuxStuct{
+	sem_wrapper * mut = new sem_wrapper{
 		sem_open(string_smp, O_CREAT), 
 		false
 	};
@@ -382,10 +380,10 @@ release_mutex(PyObject *self, PyObject *args) {
 	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
 	ReleaseMutex(mut);
 #elif defined(LINUX)
-	MutexLinuxStuct * mut = (MutexLinuxStuct *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
-	if (mut->locked) {
-		sem_post(mut->mut);
-		mut->locked = false;
+	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	if (mut->is_locked) {
+		sem_post(mut->sem);
+		mut->is_locked = false;
 	}
 #endif
 	Py_INCREF(Py_True);
@@ -413,18 +411,18 @@ static PyObject * _try_capture_mutex(PyObject * caps_mutex, int msec) {
 	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
 	DWORD out = WaitForSingleObject(mut, (DWORD) msec);
 #elif defined(LINUX)
-	MutexLinuxStuct * mut = (MutexLinuxStuct *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
 	int out;
 	if (msec == 0) {
-		out = sem_trywait(mut->mut);
+		out = sem_trywait(mut->sem);
 	} else if (msec != -1) {
 		timespec ts;
 		ts.tv_nsec = msec * 1000;
-		out = sem_timedwait(mut->mut, &ts);
+		out = sem_timedwait(mut->sem, &ts);
 	} else {
-		out = sem_wait(mut->mut);
+		out = sem_wait(mut->sem);
 	}
-	mut->locked = true;
+	if (out == 0) mut->is_locked = true;
 #endif
 
 	if (out == 0) {
