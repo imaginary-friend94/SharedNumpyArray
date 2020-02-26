@@ -122,10 +122,14 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 		string_shm);
 	if (hMapFile == NULL) error_open_file_flag = true;
 #elif defined(LINUX)
-	creat(string_shm, S_IRWXU | S_IRWXG | S_IRWXO);
-	int hMapFile = open(string_shm, O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
-	fallocate(hMapFile, FALLOC_FL_ZERO_RANGE, 0, max_buffer_size);
-	if (hMapFile == -1) error_open_file_flag = true;
+	int hMapFile = shm_open(string_shm, O_CREAT | O_EXCL, S_IRWXU | S_IRWXG | S_IRWXO);
+	//int hMapFile = open(string_shm, O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
+	//fallocate(hMapFile, FALLOC_FL_ZERO_RANGE, 0, max_buffer_size);
+	if (hMapFile == -1){ 
+		error_open_file_flag = true; 
+	} else {
+		ftruncate(hMapFile, max_buffer_size);
+	}
 #endif
 
 	if (error_open_file_flag) {
@@ -182,7 +186,7 @@ char * attach_shared_memory(char * string_shm) {
 		string_shm); 
 	if (hMapFile == NULL) error_open_file_flag = true;
 #elif defined(LINUX)
-	int hMapFile = open(string_shm, O_RDWR, 0);
+	int hMapFile = shm_open(string_shm, O_RDWR, 0);
 	if (hMapFile == -1) error_open_file_flag = true;
 #endif
 
