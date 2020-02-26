@@ -181,7 +181,7 @@ char * attach_shared_memory(char * string_shm) {
 		FALSE,
 		string_shm); 
 	if (hMapFile == NULL) error_open_file_flag = true;
-#elif defined(__linux__)
+#elif defined(LINUX)
 	int hMapFile = open(string_shm, O_RDWR, 0);
 	if (hMapFile == -1) error_open_file_flag = true;
 #endif
@@ -197,7 +197,7 @@ char * attach_shared_memory(char * string_shm) {
                         0,
                         0,
                         sizeof(size_t));
-#elif defined(__linux__)
+#elif defined(LINUX)
 	char * pBuf = (char *) mmap(0, sizeof(size_t), PROT_WRITE | PROT_READ, MAP_SHARED, hMapFile, 0);
 #endif
 
@@ -210,7 +210,7 @@ char * attach_shared_memory(char * string_shm) {
                         0,
                         0,
                         full_array_size);
-#elif defined(__linux__)
+#elif defined(LINUX)
 	munmap(pBuf, sizeof(size_t));
 	pBuf = (char *) mmap(0, full_array_size, PROT_WRITE | PROT_READ, MAP_SHARED, hMapFile, 0);
 #endif
@@ -240,7 +240,7 @@ check_mem_sh(PyObject *self, PyObject *args)
 		FALSE,
 		string_shm);
 	if (hMapFile == NULL) error_open_file_flag = true;
-#elif defined(__linux__)
+#elif defined(LINUX)
 	int hMapFile = open(string_shm, O_RDWR, 0);
 	if (hMapFile == -1) error_open_file_flag = true;
 #endif	
@@ -317,6 +317,7 @@ void destructor_mutex(PyObject *caps_mutex) {
 
 static PyObject *
 create_mutex(PyObject *self, PyObject *args) {
+	bool error_open_file_flag = false;
 	char * string_smp;
 	if (!PyArg_ParseTuple(args, "s", &string_smp)) {
 		PyErr_SetString(PyExc_RuntimeError, "create_mutex: parse except");
@@ -328,13 +329,15 @@ create_mutex(PyObject *self, PyObject *args) {
 		TRUE, 
 		string_smp
 	);
+	if (mut == nullptr) error_open_file_flag = true;
 #elif defined(LINUX)
 	sem_wrapper * mut = new sem_wrapper{
 		sem_open(string_smp, O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO, 1), 
 		false
 	};
+	if (mut->sem == SEM_FAILED) error_open_file_flag = true;
 #endif
-	if (mut == nullptr) {
+	if (error_open_file_flag) {
 		Py_INCREF(Py_None);
 		return Py_None;
 	}
@@ -343,6 +346,7 @@ create_mutex(PyObject *self, PyObject *args) {
 
 static PyObject *
 open_mutex(PyObject *self, PyObject *args) {
+	bool error_open_file_flag = false;
 	char * string_smp;
 	if (!PyArg_ParseTuple(args, "s", &string_smp)) {
 		PyErr_SetString(PyExc_RuntimeError, "open_mutex: parse except");
@@ -355,14 +359,16 @@ open_mutex(PyObject *self, PyObject *args) {
 		TRUE, 
 		string_smp
 	);
+	if (mut == nullptr) error_open_file_flag = true;
 #elif defined(LINUX)
 	sem_wrapper * mut = new sem_wrapper{
 		sem_open(string_smp, O_CREAT), 
 		false
 	};
+	if (mut->sem == SEM_FAILED) error_open_file_flag = true;
 #endif
 
-	if (mut == nullptr) {
+	if (error_open_file_flag) {
 		Py_INCREF(Py_None);
 		return Py_None;
 	}
