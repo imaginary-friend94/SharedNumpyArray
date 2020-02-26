@@ -362,7 +362,7 @@ open_mutex(PyObject *self, PyObject *args) {
 	if (mut == nullptr) error_open_file_flag = true;
 #elif defined(LINUX)
 	sem_wrapper * mut = new sem_wrapper{
-		sem_open(string_smp, O_CREAT), 
+		sem_open(string_smp, 0), 
 		false
 	};
 	if (mut->sem == SEM_FAILED) error_open_file_flag = true;
