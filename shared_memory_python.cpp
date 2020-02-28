@@ -122,13 +122,11 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 		string_shm);
 	if (hMapFile == NULL) error_open_file_flag = true;
 #elif defined(LINUX)
-	int hMapFile = shm_open(string_shm, O_CREAT | O_EXCL, S_IRWXU | S_IRWXG | S_IRWXO);
-	//int hMapFile = open(string_shm, O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
-	//fallocate(hMapFile, FALLOC_FL_ZERO_RANGE, 0, max_buffer_size);
+	int hMapFile = shm_open(string_shm, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
 	if (hMapFile == -1){ 
 		error_open_file_flag = true; 
 	} else {
-		ftruncate(hMapFile, max_buffer_size);
+		if (ftruncate(hMapFile, max_buffer_size) == -1) error_open_file_flag = true;
 	}
 #endif
 
@@ -144,7 +142,8 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
                         0,
                         max_buffer_size);
 #elif defined(LINUX)
-	char * pBuf = (char *) mmap(0, max_buffer_size, PROT_WRITE | PROT_READ, MAP_SHARED, hMapFile, 0);
+	char * pBuf = (char *) mmap(NULL, max_buffer_size, PROT_WRITE | PROT_READ, MAP_SHARED, hMapFile, 0);
+        std::cout << "pb post" << std::endl;
 #endif
 
 	if (pBuf == nullptr) {
@@ -245,7 +244,7 @@ check_mem_sh(PyObject *self, PyObject *args)
 		string_shm);
 	if (hMapFile == NULL) error_open_file_flag = true;
 #elif defined(LINUX)
-	int hMapFile = open(string_shm, O_RDWR, 0);
+	int hMapFile = shm_open(string_shm, O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
 	if (hMapFile == -1) error_open_file_flag = true;
 #endif	
 	if (error_open_file_flag) {
@@ -345,6 +344,7 @@ create_mutex(PyObject *self, PyObject *args) {
 		Py_INCREF(Py_None);
 		return Py_None;
 	}
+        std::cout << string_smp << std::endl;
 	return PyCapsule_New((void *) mut, string_smp, (PyCapsule_Destructor) destructor_mutex);
 }
 

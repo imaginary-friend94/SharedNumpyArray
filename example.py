@@ -4,7 +4,7 @@ import numpy as np
 
 def mutex_test(num):
 	arr = np.zeros((1,1))
-	mutx = sa.open_mutex("sem_cntr")
+	mutx = sa.open_mutex("sem_cntr_ex")
 	cntr = sa.attach_mem_sh("shm_mem_npy_counter")
 	for ix in range(num):
 		sa.capture_mutex(mutx)
@@ -72,7 +72,7 @@ if __name__ == '__main__':
 	)
 	## TEST 4
 
-	mutx = sa.create_mutex("sem_cntr")
+	mutx = sa.create_mutex("sem_cntr_ex")
 	sa.release_mutex(mutx)
 
 	arr = np.zeros((1,1))

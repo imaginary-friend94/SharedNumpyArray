@@ -1,7 +1,12 @@
 from setuptools import setup, find_packages, Extension
 import numpy as np
 
-ext_modules = [ Extension('winsharedarray', extra_compile_args=["-std=c++11"], sources = ['shared_memory_python.cpp']) ]
+ext_modules = [
+	Extension('winsharedarray', 
+	extra_compile_args=["-std=c++11"], 
+	sources = ['shared_memory_python.cpp'],
+	libraries = ["rt"])
+]
 
 setup(
         name = 'winsharedarray',
