@@ -157,6 +157,11 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
  * Del a buffer in shared memory
  */
 bool delete_shared_memory(char * string_shm) {
+#if defined(WIN)
+	return true;
+#elif defined(LINUX)
+	if (shm_unlink(string_shm) == 0) return true;
+#endif
 	//max_buffer_size *= 2;
 	// HANDLE hMapFile = OpenFileMapping(
 	// 	FILE_MAP_ALL_ACCESS,
@@ -170,7 +175,6 @@ bool delete_shared_memory(char * string_shm) {
 	// if (!UnmapViewOfFile((LPCVOID) pBuf)) {
 	// 	return false;
 	// }
-	return true;
 }
 
 /*
@@ -311,13 +315,6 @@ delete_mem_sh(PyObject *self, PyObject *args) {
 	return Py_False;
 }
 
-void destructor_mutex(PyObject *caps_mutex) {
-	// HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
-	// ReleaseMutex(mut);
-	//std::cout << ReleaseMutex(mut) << std::endl;
-	//std::cout << GetLastError() << std::endl;
-}
-
 static PyObject *
 create_mutex(PyObject *self, PyObject *args) {
 	bool error_open_file_flag = false;
@@ -326,16 +323,17 @@ create_mutex(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "create_mutex: parse except");
 		return nullptr;
 	}
+	char * string_shm_new = new char[strlen(string_shm)];
 #if defined(WIN)
 	HANDLE mut = CreateMutex(
 		NULL, 
 		TRUE, 
-		string_smp
+		string_shm_new
 	);
 	if (mut == nullptr) error_open_file_flag = true;
 #elif defined(LINUX)
 	sem_wrapper * mut = new sem_wrapper{
-		sem_open(string_smp, O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO, 1), 
+		sem_open(string_shm_new, O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO, 1), 
 		false
 	};
 	if (mut->sem == SEM_FAILED) error_open_file_flag = true;
@@ -344,8 +342,7 @@ create_mutex(PyObject *self, PyObject *args) {
 		Py_INCREF(Py_None);
 		return Py_None;
 	}
-        std::cout << string_smp << std::endl;
-	return PyCapsule_New((void *) mut, string_smp, (PyCapsule_Destructor) destructor_mutex);
+	return PyCapsule_New((void *) mut, string_shm_new, (PyCapsule_Destructor) NULL);
 }
 
 static PyObject *
@@ -356,17 +353,17 @@ open_mutex(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "open_mutex: parse except");
 		return nullptr;
 	}
-
+	char * string_shm_new = new char[strlen(string_shm)];
 #if defined(WIN)
 	HANDLE mut = OpenMutex(
 		MUTEX_ALL_ACCESS, 
 		TRUE, 
-		string_smp
+		string_shm_new
 	);
 	if (mut == nullptr) error_open_file_flag = true;
 #elif defined(LINUX)
 	sem_wrapper * mut = new sem_wrapper{
-		sem_open(string_smp, 0), 
+		sem_open(string_shm_new, 0), 
 		false
 	};
 	if (mut->sem == SEM_FAILED) error_open_file_flag = true;
@@ -376,7 +373,7 @@ open_mutex(PyObject *self, PyObject *args) {
 		Py_INCREF(Py_None);
 		return Py_None;
 	}
-	return PyCapsule_New((void *) mut, string_smp, (PyCapsule_Destructor) destructor_mutex);
+	return PyCapsule_New((void *) mut, string_shm_new, (PyCapsule_Destructor) destructor_mutex);
 }
 
 static PyObject *
@@ -402,18 +399,41 @@ release_mutex(PyObject *self, PyObject *args) {
 
 static PyObject *
 close_mutex(PyObject *self, PyObject *args) {
-	// PyObject * caps_mutex;
-	// if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
-	// 	PyErr_SetString(PyExc_RuntimeError, "close_mutex: parse except");
-	// 	return nullptr;
-	// }
-	// HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
-	// if (CloseHandle(mut)) {
-	// 	Py_INCREF(Py_True);
-	// 	return Py_True;
-	// }
-	Py_INCREF(Py_False);
-	return Py_False;
+	PyObject * caps_mutex;
+	if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
+		PyErr_SetString(PyExc_RuntimeError, "close_mutex: parse except");
+		return nullptr;
+	}
+#if defined(WIN)
+
+#elif defined(LINUX)
+	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	delete mut;
+	Py_INCREF(Py_True);
+	return Py_True;
+#endif	
+}
+
+static PyObject *
+remove_mutex(PyObject *self, PyObject *args) {
+	PyObject * caps_mutex;
+	if (!PyArg_ParseTuple(args, "O", &caps_mutex)) {
+		PyErr_SetString(PyExc_RuntimeError, "close_mutex: parse except");
+		return nullptr;
+	}
+#if defined(WIN)
+
+#elif defined(LINUX)
+	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
+	//PyCapsule_GetName(caps_mutex);
+	if (sem_unlink(mut->sem) != 0) {
+		Py_INCREF(Py_False);
+		return Py_False;
+	}
+	delete mut;
+	Py_INCREF(Py_True);
+	return Py_True;
+#endif	
 }
 
 static PyObject * _try_capture_mutex(PyObject * caps_mutex, int msec) {
