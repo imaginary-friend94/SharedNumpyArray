@@ -21,9 +21,7 @@ if __name__ == '__main__':
 	sa.create_mem_sh("shm_mem_npy_test_1", arr)
 
 	try:
-		print(123)
 		array_attached = sa.attach_mem_sh("shm_mem_npy_test_12")
-		print(34)
 	except RuntimeError:
 		array_attached = sa.attach_mem_sh("shm_mem_npy_test_1")	
 
