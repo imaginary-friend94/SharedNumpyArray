@@ -319,13 +319,14 @@ void mutex_destructor(PyObject * m_obj) {
 #if defined(WIN)
 
 #elif defined(LINUX)
-	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(m_obj, PyCapsule_GetName(m_obj));
+	char * name = PyCapsule_GetName(m_obj);
+	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(m_obj, name);
 	if (mut->is_locked) {
 		sem_post(mut->sem);
 		mut->is_locked = false;
 	}
-	if (PyCapsule_GetName(m_obj) != NULL) {
-		delete PyCapsule_GetName(m_obj);
+	if (name != NULL) {
+		delete name;
 	}
 	delete mut;
 #endif
@@ -444,13 +445,15 @@ remove_mutex(PyObject *self, PyObject *args) {
 #elif defined(LINUX)
 	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
 	//PyCapsule_GetName(caps_mutex);
-	if (sem_unlink(mut->sem) == -1) {
+	char * name = PyCapsule_GetName(caps_mutex);
+	if (sem_unlink(name) == -1) {
 		Py_INCREF(Py_False);
 		return Py_False;
 	}
-	if (PyCapsule_GetName(caps_mutex) != NULL) {
-		delete PyCapsule_GetName(caps_mutex);
+	if (name != NULL) {
+		delete name;
 	}
+	delete mut;
 	Py_INCREF(Py_True);
 	return Py_True;
 #endif	
