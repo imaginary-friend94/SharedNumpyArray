@@ -110,7 +110,6 @@ PyArrayObject * copy_from_buffer_to_numpy_array(char * buffer) {
  */
 char * create_shared_memory(char * string_shm, int max_buffer_size) {
 	bool error_open_file_flag = false;
-
 #if defined(WIN)
 	HANDLE hMapFile;
 	hMapFile = CreateFileMapping(
@@ -122,8 +121,8 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
 		string_shm);
 	if (hMapFile == NULL) error_open_file_flag = true;
 #elif defined(LINUX)
-	int hMapFile = shm_open(string_shm, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
-	if (hMapFile == -1){ 
+	int hMapFile = shm_open(string_shm, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+	if (hMapFile < 0){ 
 		error_open_file_flag = true; 
 	} else {
 		if (ftruncate(hMapFile, max_buffer_size) == -1) error_open_file_flag = true;
@@ -143,7 +142,6 @@ char * create_shared_memory(char * string_shm, int max_buffer_size) {
                         max_buffer_size);
 #elif defined(LINUX)
 	char * pBuf = (char *) mmap(NULL, max_buffer_size, PROT_WRITE | PROT_READ, MAP_SHARED, hMapFile, 0);
-        std::cout << "pb post" << std::endl;
 #endif
 
 	if (pBuf == nullptr) {
@@ -316,19 +314,22 @@ delete_mem_sh(PyObject *self, PyObject *args) {
 }
 
 void mutex_destructor(PyObject * m_obj) {
+	//std::cout << "mtx dst" << std::endl;
 #if defined(WIN)
 
 #elif defined(LINUX)
-	char * name = PyCapsule_GetName(m_obj);
+	const char * name = PyCapsule_GetName(m_obj);
 	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(m_obj, name);
-	if (mut->is_locked) {
-		sem_post(mut->sem);
-		mut->is_locked = false;
-	}
 	if (name != NULL) {
-		delete name;
+		if (mut->is_locked) {
+			sem_post(mut->sem);
+			mut->is_locked = false;
+		}
+		if (name != NULL) {
+			delete name;
+		}
+		delete mut;
 	}
-	delete mut;
 #endif
 }
 
@@ -445,7 +446,7 @@ remove_mutex(PyObject *self, PyObject *args) {
 #elif defined(LINUX)
 	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
 	//PyCapsule_GetName(caps_mutex);
-	char * name = PyCapsule_GetName(caps_mutex);
+	const char * name = PyCapsule_GetName(caps_mutex);
 	if (sem_unlink(name) == -1) {
 		Py_INCREF(Py_False);
 		return Py_False;
@@ -454,6 +455,8 @@ remove_mutex(PyObject *self, PyObject *args) {
 		delete name;
 	}
 	delete mut;
+	PyCapsule_SetName(caps_mutex, NULL);
+	//PyCapsule_SetPointer(caps_mutex, NULL);
 	Py_INCREF(Py_True);
 	return Py_True;
 #endif	
@@ -518,6 +521,12 @@ get_last_error(PyObject *self, PyObject *args) {
 	return py_err;
 }
 
+static PyObject *
+test_function(PyObject *self, PyObject *args) {
+	int fd = shm_open("/test_sh_m", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+	return Py_None;
+}
+
 static PyMethodDef WinSharedArrayMethods[] = {
 
     {"create_mem_sh",  create_mem_sh, METH_VARARGS,
@@ -537,10 +546,12 @@ static PyMethodDef WinSharedArrayMethods[] = {
     {"close_mutex",  close_mutex, METH_VARARGS,
      ""},
     {"try_capture_mutex",  try_capture_mutex, METH_VARARGS,
-     ""},
+      ""},
     {"close_mutex",  close_mutex, METH_VARARGS,
      ""},
     {"remove_mutex",  remove_mutex, METH_VARARGS,
+     ""},
+    {"test_function",  test_function, METH_VARARGS,
      ""},
     {"capture_mutex",  capture_mutex, METH_VARARGS,
      "capture mutex"},
