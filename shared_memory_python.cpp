@@ -160,19 +160,6 @@ bool delete_shared_memory(char * string_shm) {
 #elif defined(LINUX)
 	if (shm_unlink(string_shm) == 0) return true;
 #endif
-	//max_buffer_size *= 2;
-	// HANDLE hMapFile = OpenFileMapping(
-	// 	FILE_MAP_ALL_ACCESS,
-	// 	FALSE,
-	// 	string_shm);
-
-	// if (!CloseHandle(hMapFile)) {
-	// 	return false;
-	// }
-
-	// if (!UnmapViewOfFile((LPCVOID) pBuf)) {
-	// 	return false;
-	// }
 }
 
 /*
@@ -250,8 +237,10 @@ check_mem_sh(PyObject *self, PyObject *args)
 	if (hMapFile == -1) error_open_file_flag = true;
 #endif	
 	if (error_open_file_flag) {
+		Py_INCREF(Py_False);
 		return Py_False;
 	}
+	Py_INCREF(Py_True);
 	return Py_True;
 
 }
@@ -309,14 +298,15 @@ delete_mem_sh(PyObject *self, PyObject *args) {
 		Py_INCREF(Py_True);
 		return Py_True;
 	}
-	Py_INCREF(Py_True);
+	Py_INCREF(Py_False);
 	return Py_False;
 }
 
 void mutex_destructor(PyObject * m_obj) {
-	//std::cout << "mtx dst" << std::endl;
 #if defined(WIN)
-
+	const char * name = PyCapsule_GetName(m_obj);
+	HANDLE mut = (HANDLE) PyCapsule_GetPointer(m_obj, PyCapsule_GetName(m_obj));
+	delete name;
 #elif defined(LINUX)
 	const char * name = PyCapsule_GetName(m_obj);
 	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(m_obj, name);
@@ -341,21 +331,25 @@ create_mutex(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "create_mutex: parse except");
 		return nullptr;
 	}
-	char * string_shm_new = new char[strlen(string_smp)];
+	char * string_shm_new = new char[strlen(string_smp) + 1];
 	strcpy(string_shm_new, string_smp);
 #if defined(WIN)
 	HANDLE mut = CreateMutex(
 		NULL, 
-		TRUE, 
+		FALSE, 
 		string_shm_new
 	);
-	if (mut == nullptr) error_open_file_flag = true;
+	if (mut == nullptr) {
+		error_open_file_flag = true;
+	}
 #elif defined(LINUX)
 	sem_wrapper * mut = new sem_wrapper{
 		sem_open(string_shm_new, O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO, 1), 
 		false
 	};
-	if (mut->sem == SEM_FAILED) error_open_file_flag = true;
+	if (mut->sem == SEM_FAILED) {
+		error_open_file_flag = true;
+	}
 #endif
 	if (error_open_file_flag) {
 		Py_INCREF(Py_None);
@@ -372,7 +366,7 @@ open_mutex(PyObject *self, PyObject *args) {
 		PyErr_SetString(PyExc_RuntimeError, "open_mutex: parse except");
 		return nullptr;
 	}
-	char * string_shm_new = new char[strlen(string_smp)];
+	char * string_shm_new = new char[strlen(string_smp) + 1];
 	strcpy(string_shm_new, string_smp);
 #if defined(WIN)
 	HANDLE mut = OpenMutex(
@@ -445,7 +439,6 @@ remove_mutex(PyObject *self, PyObject *args) {
 
 #elif defined(LINUX)
 	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
-	//PyCapsule_GetName(caps_mutex);
 	const char * name = PyCapsule_GetName(caps_mutex);
 	if (sem_unlink(name) == -1) {
 		Py_INCREF(Py_False);
@@ -456,7 +449,6 @@ remove_mutex(PyObject *self, PyObject *args) {
 	}
 	delete mut;
 	PyCapsule_SetName(caps_mutex, NULL);
-	//PyCapsule_SetPointer(caps_mutex, NULL);
 	Py_INCREF(Py_True);
 	return Py_True;
 #endif	
@@ -465,7 +457,12 @@ remove_mutex(PyObject *self, PyObject *args) {
 static PyObject * _try_capture_mutex(PyObject * caps_mutex, int msec) {
 #if defined(WIN)
 	HANDLE mut = (HANDLE) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
-	DWORD out = WaitForSingleObject(mut, (DWORD) msec);
+	DWORD out;
+	if (msec == -1) {
+		out = WaitForSingleObject(mut, INFINITE);
+	} else {
+		out = WaitForSingleObject(mut, (DWORD) msec);
+	}
 #elif defined(LINUX)
 	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
 	int out;
@@ -521,11 +518,11 @@ get_last_error(PyObject *self, PyObject *args) {
 	return py_err;
 }
 
-static PyObject *
-test_function(PyObject *self, PyObject *args) {
-	int fd = shm_open("/test_sh_m", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-	return Py_None;
-}
+// static PyObject *
+// test_function(PyObject *self, PyObject *args) {
+// 	int fd = shm_open("/test_sh_m", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+// 	return Py_None;
+// }
 
 static PyMethodDef WinSharedArrayMethods[] = {
 
@@ -551,8 +548,7 @@ static PyMethodDef WinSharedArrayMethods[] = {
      ""},
     {"remove_mutex",  remove_mutex, METH_VARARGS,
      ""},
-    {"test_function",  test_function, METH_VARARGS,
-     ""},
+
     {"capture_mutex",  capture_mutex, METH_VARARGS,
      "capture mutex"},
     {"get_last_error",  get_last_error, METH_VARARGS,
