@@ -260,7 +260,8 @@ create_mem_sh(PyObject *self, PyObject *args)
 	/* Аrray size calculation */ 
 	char * shBuf = create_shared_memory(string_shm, ARRAY_FULL_SIZE(array_for_shrdmem));
 	if (shBuf == nullptr) {
-		return NULL;
+		Py_INCREF(Py_None);
+		return Py_None;
 	}
 	/* Copy array struct from heap to shared memory */
 	*((size_t *) shBuf) = ARRAY_FULL_SIZE(array_for_shrdmem);
@@ -279,7 +280,8 @@ attach_mem_sh(PyObject *self, PyObject *args)
 	}
 	char * shBuf = attach_shared_memory(string_shm);
 	if (shBuf == nullptr) {
-		return NULL;
+		Py_INCREF(Py_None);
+		return Py_None;
 	}
 
 	PyArrayObject * array_for_shrdmem = (PyArrayObject *) shBuf;
@@ -436,7 +438,8 @@ remove_mutex(PyObject *self, PyObject *args) {
 		return nullptr;
 	}
 #if defined(WIN)
-
+	Py_INCREF(Py_True);
+	return Py_True;
 #elif defined(LINUX)
 	sem_wrapper * mut = (sem_wrapper *) PyCapsule_GetPointer(caps_mutex, PyCapsule_GetName(caps_mutex));
 	const char * name = PyCapsule_GetName(caps_mutex);
