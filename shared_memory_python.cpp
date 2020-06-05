@@ -101,6 +101,7 @@ PyArrayObject * copy_from_buffer_to_numpy_array(char * buffer) {
 		type_num, 
 		(void *) current_pointer
 	);
+	copy_from_pointer_array((npy_intp*)array->strides, (npy_intp*)strides, nd);
 	return array;
 }
 
