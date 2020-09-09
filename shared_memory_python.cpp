@@ -1,6 +1,9 @@
 #if defined(_WIN64) || defined(_WIN32) || defined(__CYGWIN__)
 #define WIN
-#include <windows.h>
+#include <Windows.h>
+#include <winbase.h>
+#include <sddl.h>
+#pragma comment(lib, "advapi32.lib")
 #elif defined(__linux__)
 #define LINUX
 #include <sys/mman.h>
@@ -25,6 +28,34 @@ struct sem_wrapper
 #define WIN_SMEM "WINDOWS SHARED MEMORY"
 #define ARRAY_STRUCT_SIZE sizeof(PyArrayObject)
 #define ARRAY_FULL_SIZE(arr) (size_data_array(arr) + sizeof(int) + arr->nd * sizeof(npy_intp) * 3 + sizeof(int))
+
+
+#if defined(WIN)
+
+BOOL CreateMyDACL(SECURITY_ATTRIBUTES * pSA)
+{
+     TCHAR * szSD = TEXT("D:")       // Discretionary ACL
+        TEXT("(D;OICI;GA;;;BG)")     // Deny access to 
+                                     // built-in guests
+        TEXT("(D;OICI;GA;;;AN)")     // Deny access to 
+                                     // anonymous logon
+        TEXT("(A;OICI;GRGWGX;;;AU)") // Allow 
+                                     // read/write/execute 
+                                     // to authenticated 
+                                     // users
+        TEXT("(A;OICI;GA;;;BA)");    // Allow full control 
+                                     // to administrators
+
+    if (NULL == pSA)
+        return FALSE;
+
+     return ConvertStringSecurityDescriptorToSecurityDescriptor(
+                szSD,
+                SDDL_REVISION_1,
+                &(pSA->lpSecurityDescriptor),
+                NULL);
+}
+#endif
 
 /*
  * copy_from_pointer_array
@@ -111,10 +142,17 @@ PyArrayObject * copy_from_buffer_to_numpy_array(char * buffer) {
 char * create_shared_memory(char * string_shm, int max_buffer_size) {
 	bool error_open_file_flag = false;
 #if defined(WIN)
+	SECURITY_ATTRIBUTES sa;
+	if (!CreateMyDACL(&sa))
+    {
+         // Error encountered; generate message and exit.
+		PyErr_SetString(PyExc_RuntimeError, "create_mutex: failed CreateMyDACL");
+		return nullptr;
+    }
 	HANDLE hMapFile;
 	hMapFile = CreateFileMapping(
 		INVALID_HANDLE_VALUE,
-		NULL,
+		&sa,
 		PAGE_READWRITE,
 		0,
 		max_buffer_size,
@@ -337,8 +375,15 @@ create_mutex(PyObject *self, PyObject *args) {
 	char * string_shm_new = new char[strlen(string_smp) + 1];
 	strcpy(string_shm_new, string_smp);
 #if defined(WIN)
+	SECURITY_ATTRIBUTES sa;
+	if (!CreateMyDACL(&sa))
+    {
+         // Error encountered; generate message and exit.
+		PyErr_SetString(PyExc_RuntimeError, "create_mutex: failed CreateMyDACL");
+		return nullptr;
+    }
 	HANDLE mut = CreateMutex(
-		NULL, 
+		&sa, 
 		FALSE, 
 		string_shm_new
 	);
