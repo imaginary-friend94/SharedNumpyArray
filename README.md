@@ -1,5 +1,6 @@
 ### Shared Numpy Array cross-platform [python 3]
-![test workflow](https://github.com/imaginary-friend94/SharedNumpyArrayAction/actions/workflows/tests.yml/badge.svg)
+![test workflow](https://github.com/imaginary-friend94/SharedNumpyArray/actions/workflows/tests.yml/badge.svg)
+[![Release](https://img.shields.io/github/v/release/imaginary-friend94/SharedNumpyArray)](https://github.com/imaginary-friend94/SharedNumpyArray/releases)
 
 *Share numpy arrays between processes*
 <br/>
