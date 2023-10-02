@@ -1,5 +1,6 @@
 ### Shared Array for Windows [python 3]
 *Share numpy arrays between processes*
+![test workflow](https://github.com/imaginary-friend94/SharedNumpyArrayAction/actions/workflows/tests.yml/badge.svg)
 <br/>
 **example:**
 ```python
