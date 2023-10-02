@@ -573,7 +573,7 @@ get_last_error(PyObject *self, PyObject *args) {
 // 	return Py_None;
 // }
 
-static PyMethodDef WinSharedArrayMethods[] = {
+static PyMethodDef NumpySharedArrayMethods[] = {
 
     {"create_mem_sh",  create_mem_sh, METH_VARARGS,
      "method for create shared memory named."},
@@ -607,14 +607,14 @@ static PyMethodDef WinSharedArrayMethods[] = {
 
 static struct PyModuleDef wsamodule = {
     PyModuleDef_HEAD_INIT,
-    "winsharedarray", 
+    "numpysharedarray", 
     NULL, 
     -1,    
-    WinSharedArrayMethods
+    NumpySharedArrayMethods
 };
 
 PyMODINIT_FUNC
-PyInit_winsharedarray(void)
+PyInit_numpysharedarray(void)
 {
 	import_array();
     return PyModule_Create(&wsamodule);
