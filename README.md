@@ -1,7 +1,9 @@
-### Shared Array for Windows [python 3]
-*Share numpy arrays between processes*
+### Shared Numpy Array cross-platform [python 3]
 ![test workflow](https://github.com/imaginary-friend94/SharedNumpyArrayAction/actions/workflows/tests.yml/badge.svg)
+
+*Share numpy arrays between processes*
 <br/>
+
 **example:**
 ```python
 import winsharedarray as sa
