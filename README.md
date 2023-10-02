@@ -5,7 +5,8 @@
 *Share numpy arrays between processes*
 <br/>
 
-![image](https://github.com/imaginary-friend94/SharedNumpyArray/assets/15076754/0e845f40-2589-41e2-a89d-9172b5f6efcf)
+![image](https://github.com/imaginary-friend94/SharedNumpyArray/assets/15076754/a37651bd-844c-45e9-b359-012be75ca69f)
+
 
 **example:**
 ```python
