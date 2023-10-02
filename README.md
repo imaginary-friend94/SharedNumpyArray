@@ -5,6 +5,8 @@
 *Share numpy arrays between processes*
 <br/>
 
+![image](https://github.com/imaginary-friend94/SharedNumpyArray/assets/15076754/0e845f40-2589-41e2-a89d-9172b5f6efcf)
+
 **example:**
 ```python
 import winsharedarray as sa
