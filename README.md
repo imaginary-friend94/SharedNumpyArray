@@ -5,6 +5,9 @@
 *Share numpy arrays between processes*
 <br/>
 
+![image](https://github.com/imaginary-friend94/SharedNumpyArray/assets/15076754/a37651bd-844c-45e9-b359-012be75ca69f)
+
+
 **how use shared array:**
 ```python
 #process 1
@@ -35,7 +38,6 @@ array_attached = nps.attach_mem_sh("shm_mem_npy")
 #        [ 0.        ,  0.        ,  0.        ,  0.        ,  0.        ],
 #        [ 0.        ,  0.        ,  0.        ,  0.        ,  0.        ]])
 print(array_attached)
-
 ```
 
 
@@ -58,6 +60,7 @@ counter_array = np.zeros((1,1))
 nps.create_mem_sh("counter_name", counter_array)
 mutx = nps.create_mutex("mutex_name")
 
+#adding to 5 threads
 p = Pool(5)
 p.map(mutex_test, range(5000))
 attach_array = nps.attach_mem_sh("counter_name")
