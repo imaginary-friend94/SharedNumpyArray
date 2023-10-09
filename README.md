@@ -7,6 +7,7 @@
 
 ![image](https://github.com/imaginary-friend94/SharedNumpyArray/assets/15076754/a37651bd-844c-45e9-b359-012be75ca69f)
 
+*FOR OS WINDOWS:* you should use slash as first symbol of shared memory name. for ex: /shm_mem_npy
 
 **how use shared array:**
 ```python
