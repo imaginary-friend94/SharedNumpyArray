@@ -16,7 +16,7 @@
 import numpysharedarray as nps
 import numpy as np
 
-arr = np.zeros((5,5))
+arr = np.zeros((15,5))
 
 #this function create new array and copy in shared memory
 nps.create_mem_sh("shm_mem_npy", arr)
